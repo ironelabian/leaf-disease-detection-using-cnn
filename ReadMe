@@ -1,0 +1,178 @@
+##         ## creating virtualenv                                                         
+
+##        1. create virtualenv "the name of virtualenv is leaf-disease-detection-env"      
+##                >python3 -m venv leaf-disease-detection-env                       
+
+##        2. activate the virtualenv                                                      
+##                >source leaf-disease-detection-env/bin/activate                         
+
+##        ## installing dependencies ##                                                   
+##        1. pip install numpy                                                            
+
+##        2. pip install fastapi
+
+##        3. pip install fastapi
+
+##        4. pip install uvicorn
+
+##        5. pip install python-multipart
+
+##        6. pip install pillow
+
+##        7. pip tensorflow-serving-api==2.5.0
+
+##        8. pip install matplotlib
+
+##        9. pip install numpy
+
+##        ## installing tensorflow ##
+
+##        note: work in virtualenv
+
+##        1.sudo apt-get install python3-numpy
+
+##        2.sudo apt-get install libblas-dev
+
+##        3.sudo apt-get install liblapack-dev
+
+##        4.sudo apt-get install python3-dev 
+
+##        5.sudo apt-get install libatlas-base-dev
+
+##        6.sudo apt-get install gfortran
+
+##        7.sudo apt-get install python3-setuptools
+
+##        8.sudo apt-get install python3-scipy
+
+##        9.sudo apt-get update
+
+##        10.sudo apt-get install python3-h5py
+
+##        11.pip install --upgrade scipy
+
+##        12.pip install --upgrade cython
+
+##        13.pip install tensorflow
+
+##        14. pip install keras
+
+##        ## change the python default version ##
+
+##        1. sudo apt update
+
+##        2. sudo apt install wget build-essential checkinstall
+
+##        3. sudo apt install build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev
+
+##        4. wget https://www.python.org/ftp/python/3.9.7/Python-3.9.7.tar.xz
+
+##        5. tar -Jxf Python-3.9.7.tar.xz
+
+##        6. cd Python-3.9.7
+
+##        7. ./configure --enable-optimizations --prefix=/usr
+
+##        8. make
+
+##        9. sudo make altinstall
+
+##        10. cd ..
+
+##        11. sudo rm -r Python-3.9.7
+##        rm -rf Python-3.9.7.tar.xz
+
+##        12. update-alternatives --install /usr/bin/python python /usr/bin/python3.9
+
+
+        ## running the react app in rpi4 ##
+
+        ## running react app ##
+
+            cd api
+            uvicorn main:app --reload --host 0.0.0.0 --port 8001
+
+
+        ## run the main application ##
+            cd api
+            python main.py
+
+        ## run the frontend #
+
+            cd frontend
+            NODE_OPTIONS=--openssl-legacy-provider npm run start
+
+
+##      ## edit main.py 
+
+
+""                                                                                    ""
+            from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+            from fastapi.middleware.cors import CORSMiddleware
+            import uvicorn
+            import numpy as np
+            from io import BytesIO
+            from PIL import Image
+            import tensorflow as tf
+
+            app = FastAPI()
+
+            origins = [
+                "http://localhost",
+                "http://localhost:3000",
+            ]
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=origins,
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
+
+            MODEL = tf.keras.models.load_model("../saved_models/3")
+
+            CLASS_NAMES = ["Healthy", "Leaf Blight", "Leaf Mosaic", "Leaf Rust", "Undefined"]
+
+            @app.get("/ping")
+            async def ping():
+                return "Hello, I am alive"
+
+            def read_file_as_image(data) -> np.ndarray:
+                try:
+                    # Try to open the image using PIL
+                    image = np.array(Image.open(BytesIO(data)))
+                except Exception as e:
+                    # If it fails, assume it's a blob and decode it
+                    try:
+                        image = np.array(Image.open(BytesIO(bytes(data))))
+                    except Exception as e:
+                        raise HTTPException(status_code=400, detail="Invalid image data")
+                return image
+
+            @app.post("/predict")
+            async def predict(
+                file: UploadFile = File(None),
+                blob_file: bytes = Form(None)
+            ):
+                if not file and not blob_file:
+                    raise HTTPException(status_code=400, detail="No file provided")
+
+                if file:
+                    image = read_file_as_image(await file.read())
+                elif blob_file:
+                    image = read_file_as_image(blob_file)
+
+                img_batch = np.expand_dims(image, 0)
+                
+                predictions = MODEL.predict(img_batch)
+
+                predicted_class = CLASS_NAMES[np.argmax(predictions[0])]
+                confidence = np.max(predictions[0])
+                return {
+                    'class': predicted_class,
+                    'confidence': float(confidence)
+                }
+
+            if __name__ == "__main__":
+                uvicorn.run(app, host='localhost', port=8000)           
+""                                                                                     ""                
